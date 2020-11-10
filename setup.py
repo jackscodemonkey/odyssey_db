@@ -29,6 +29,8 @@ setup(
         'sphinx-sql',
 	'sphinx-argparse',
 	'pytest',
+    'pytest-mock',
+    'psycopg2-binary',
     ],
     include_package_data=True,
     cmdclass=cmdclass,

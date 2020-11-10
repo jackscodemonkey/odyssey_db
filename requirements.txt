@@ -1,5 +1,6 @@
 alabaster==0.7.12
 attrs==20.3.0
+autopep8==1.5.4
 Babel==2.8.0
 certifi==2020.6.20
 chardet==3.0.4
@@ -9,12 +10,16 @@ imagesize==1.2.0
 iniconfig==1.1.1
 Jinja2==3.0.0a1
 MarkupSafe==2.0.0a1
+-e git+https://github.com/jackscodemonkey/odyssey_db.git@5df50a9793d018a2a1ce68c2015be3cadb095adf#egg=odyssey_db
 packaging==20.4
 pluggy==0.13.1
+psycopg2-binary==2.8.6
 py==1.9.0
+pycodestyle==2.6.0
 Pygments==2.7.2
 pyparsing==3.0.0b1
 pytest==6.1.2
+pytest-mock==3.3.1
 pytz==2020.4
 requests==2.24.0
 six==1.15.0
