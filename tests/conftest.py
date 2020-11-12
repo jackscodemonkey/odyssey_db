@@ -1,6 +1,5 @@
 import pytest
-from odyssey_db.odyssey_db import Migrate, Fixture
-from odyssey_db.db.postgres import pg
+from odyssey_db.db import postgres
 
 @pytest.fixture(scope="module")
 def postgres():

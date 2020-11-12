@@ -13,7 +13,7 @@ class pg:
 
         # Dictionary of regex used to parse sql files
         self.regex_dict = {
-            'object': '(?<=create)(.*?)((\w*)\.(\w*))',
+            'object': '(?<=create)(.*?)((\w*)\.(\w*))|(?<=create)(.*?)(\w*)\;',
         }
 
         # Converts dictionary to dot notation object
