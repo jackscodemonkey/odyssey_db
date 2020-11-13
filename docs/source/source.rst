@@ -4,8 +4,13 @@ Source
 .. automodule:: odyssey_db.odyssey_db
    :members:
 
-.. autoclass:: odyssey_db.odyssey_db.Migrate
+.. autoclass:: odyssey_db.migrate.Migrate
    :members:
 
-.. autoclass:: odyssey_db.odyssey_db.Fixture
+.. autoclass:: odyssey_db.builder.Builder
    :members:
+
+.. autoclass:: odyssey_db.fixture.Fixture
+   :members:
+
+

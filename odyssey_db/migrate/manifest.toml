@@ -1,0 +1,29 @@
+###########################
+# Migration Configuration
+##########################
+
+[0001]
+up = [
+    {name = "util", type="schema", action="create"},
+    {name = "util.table1", type = "table", action = "create"},
+    {name = "util.table1", type = "table", action = "drop"},
+    {name = "util.table2", type = "table", action = "create"},
+    {name = "util.function", type = "function", action = "create"},
+    {name = "util.table3", type = "ddl", action = "execute", location="migrations/0001/up/meh.sql"},
+    {name = "data fix", type="dml", action="execute", location="migrations/0001/up/data_fix.sql"}
+]
+down = [
+    {name = "data fix", type="dml", action="execute", location="migrations/0001/down/data_fix.sql"},
+    {name = "util.table3", type = "ddl", action = "execute", location="migrations/0001/down/meh.sql"},
+    {name = "util.function", type = "function", action = "drop"},
+    {name = "util.table2", type = "table", action = "drop"}
+    {name = "util", type="schema", action="drop"}
+]
+
+[0002]
+up = [
+    {name="sandbox", type="schema", action="create"}
+]
+down = [
+    {name="sandbox", type="schema", action="drop"}
+]

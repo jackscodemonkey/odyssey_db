@@ -20,4 +20,8 @@ DATABASE = {
 
 SQL_SRC = os.path.join(BASE_DIR, 'src')
 
-MIGRATION_FOLDER=os.path.join(BASE_DIR, 'migrations')
+MIGRATION_FOLDER = os.path.join(BASE_DIR, 'migrations')
+
+LOGGING = {
+    'format': '%(asctime)s [%(levelname)s] [%(module)s] - %(message)s',
+}

@@ -42,5 +42,10 @@ setup(
             'source_dir': ('setup.py', 'docs/source'),
             'build_dir': ('setup.py', 'docs/build')
         }
+    },
+    entry_points={
+        "console_scripts": [
+            "odyssey = odyssey_db.odyssey_db:main"
+        ]
     }
 )
