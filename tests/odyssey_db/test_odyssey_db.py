@@ -3,6 +3,7 @@ from unittest.mock import patch, mock_open
 import io
 from io import StringIO
 import tempfile
+from pathlib import Path
 from odyssey_db.migrate import Migrate
 from odyssey_db.fixture import Fixture
 from odyssey_db.builder import Builder
@@ -77,10 +78,12 @@ def test_read_files(mocker, postgres, migrate):
     regex_compile = postgres.sql_object_name
 
     with patch('builtins.open', mock_open(read_data='CREATE EXTERNAL TABLE util.external_table')) as mock_file:
-        results_table = migrate.read_sql_files(srcpath='/', str_regex=regex_compile)
+        results_table = migrate.read_sql_files(
+            srcpath='/', str_regex=regex_compile)
 
     with patch('builtins.open', mock_open(read_data='CREATE SCHEMA util;')) as mock_file:
-        results_schema = migrate.read_sql_files(srcpath='/', str_regex=regex_compile)
+        results_schema = migrate.read_sql_files(
+            srcpath='/', str_regex=regex_compile)
 
     assert results_table['EXTERNAL TABLE'][0]['file'] == '/home/functions/function.sql'
     assert results_table['EXTERNAL TABLE'][0]['name'] == 'util.external_table'
@@ -130,7 +133,7 @@ def test_generate_file_hash(mocker, builder):
 
 
 @pytest.mark.builder
-def test_write_migration_files(mocker, builder):
+def test_build_migration(mocker, builder):
     sql_source = """
     CREATE OR REPLACE FUNCTION util.function()
     RETURNS VOID AS
@@ -142,12 +145,61 @@ def test_write_migration_files(mocker, builder):
     $BODY$
     LANGUAGE plpgsql;
     """
+    expected_result = [
+        '\n-- ODESSEY BEGIN |util|schema\nCREATE SCHEMA util;\n-- ODESSEY END |util|schema\n',
+        '\n-- ODESSEY BEGIN |util.table1|table\n\n    CREATE OR REPLACE FUNCTION util.function()\n    RETURNS VOID AS\n    $BODY$\n        DECLARE v_sql = text();\n        BEGIN;\n            SELECT 1;\n        END;\n    $BODY$\n    LANGUAGE plpgsql;\n    \n-- ODESSEY END |util.table1|table\n',
+        '\n-- ODESSEY BEGIN |util.table1|table\nDROP TABLE util.table1;\n-- ODESSEY END |util.table1|table\n',
+        '\n-- ODESSEY BEGIN |util.function|function\n\n    CREATE OR REPLACE FUNCTION util.function()\n    RETURNS VOID AS\n    $BODY$\n        DECLARE v_sql = text();\n        BEGIN;\n            SELECT 1;\n        END;\n    $BODY$\n    LANGUAGE plpgsql;\n    \n-- ODESSEY END |util.function|function\n',
+        '\n-- ODESSEY BEGIN |util.table3|ddl\n\n    CREATE OR REPLACE FUNCTION util.function()\n    RETURNS VOID AS\n    $BODY$\n        DECLARE v_sql = text();\n        BEGIN;\n            SELECT 1;\n        END;\n    $BODY$\n    LANGUAGE plpgsql;\n    \n-- ODESSEY END |util.table3|ddl\n',
+        '\n-- ODESSEY BEGIN |data fix|dml\n\n    CREATE OR REPLACE FUNCTION util.function()\n    RETURNS VOID AS\n    $BODY$\n        DECLARE v_sql = text();\n        BEGIN;\n            SELECT 1;\n        END;\n    $BODY$\n    LANGUAGE plpgsql;\n    \n-- ODESSEY END |data fix|dml\n'
+    ]
 
-    source_file_dict = [{'file': '/home/functions/function.sql', 'name': 'util.function'}, {'file': '/home/tables/table.sql', 'name': 'util.table'}]
+    source_file_dict = [{'file': '/home/functions/function.sql', 'name': 'util.function'},
+                        {'file': '/home/tables/table.sql', 'name': 'util.table1'}]
 
     config_dict = {'0001': {'up': [{'name': 'util', 'type': 'schema', 'action': 'create'}, {'name': 'util.table1', 'type': 'table', 'action': 'create'}, {'name': 'util.table1', 'type': 'table', 'action': 'drop'}, {'name': 'util.table2', 'type': 'table', 'action': 'create'}, {'name': 'util.function', 'type': 'function', 'action': 'create'}, {'name': 'util.table3', 'type': 'ddl', 'action': 'execute', 'location': 'migrations/0001/up/meh.sql'}, {'name': 'data fix', 'type': 'dml', 'action': 'execute', 'location': 'migrations/0001/up/data_fix.sql'}],
                             'down': [{'name': 'data fix', 'type': 'dml', 'action': 'execute', 'location': 'migrations/0001/down/data_fix.sql'}, {'name': 'util.table3', 'type': 'ddl', 'action': 'execute', 'location': 'migrations/0001/down/meh.sql'}, {'name': 'util.function', 'type': 'function', 'action': 'drop'}, {'name': 'util.table2', 'type': 'table', 'action': 'drop'}, {'name': 'util', 'type': 'schema', 'action': 'drop'}]}, '0002': {'up': [{'name': 'sandbox', 'type': 'schema', 'action': 'create'}], 'down': [{'name': 'sandbox', 'type': 'schema', 'action': 'drop'}]}}
     with patch('builtins.open', mock_open(read_data=sql_source)) as mock_file:
-        result = builder.write_migration_files('0001', config_dict, source_file_dict)
+        result = builder.build_migration('0001', config_dict, source_file_dict)
+    a = str(result)
+    assert len(result) == len(expected_result)
+    assert result == expected_result
 
-    assert result
+@pytest.mark.builder
+def test_migration_file_name(builder):
+    build_number = '0001'
+    direction = 'up'
+    migration_folder = 'src/migrations/'
+    expected_result = Path('src/migrations/0001_up.sql')
+    result = builder.migration_file_name(build_number=build_number, direction=direction, migration_folder=migration_folder)
+
+    assert result == expected_result
+
+@pytest.mark.builder
+def test_migration_file_exists(mocker, builder):
+    file = Path('src/migrations/0001_up.sql')
+    mocker.patch('pathlib.Path.is_file', return_value=True)
+    result_is_file = builder.migration_file_exists(file)
+    mocker.patch("pathlib.Path.is_file", return_value=False)
+    resuilt_not_file = builder.migration_file_exists(file)
+
+    assert result_is_file == True
+    assert resuilt_not_file == False
+
+@pytest.mark.builder
+def test_write_migration(mocker, tmpdir, builder):
+    tf = tempfile.NamedTemporaryFile(mode='w+', dir=tmpdir, delete=False)
+    file = Path(tf.name)
+    spec = [
+        '\n-- ODESSEY BEGIN |util|schema\nCREATE SCHEMA util;\n-- ODESSEY END |util|schema\n',
+        '\n-- ODESSEY BEGIN |util.table1|table\n\n    CREATE OR REPLACE FUNCTION util.function()\n    RETURNS VOID AS\n    $BODY$\n        DECLARE v_sql = text();\n        BEGIN;\n            SELECT 1;\n        END;\n    $BODY$\n    LANGUAGE plpgsql;\n    \n-- ODESSEY END |util.table1|table\n',
+        '\n-- ODESSEY BEGIN |util.table1|table\nDROP TABLE util.table1;\n-- ODESSEY END |util.table1|table\n',
+        '\n-- ODESSEY BEGIN |util.function|function\n\n    CREATE OR REPLACE FUNCTION util.function()\n    RETURNS VOID AS\n    $BODY$\n        DECLARE v_sql = text();\n        BEGIN;\n            SELECT 1;\n        END;\n    $BODY$\n    LANGUAGE plpgsql;\n    \n-- ODESSEY END |util.function|function\n',
+        '\n-- ODESSEY BEGIN |util.table3|ddl\n\n    CREATE OR REPLACE FUNCTION util.function()\n    RETURNS VOID AS\n    $BODY$\n        DECLARE v_sql = text();\n        BEGIN;\n            SELECT 1;\n        END;\n    $BODY$\n    LANGUAGE plpgsql;\n    \n-- ODESSEY END |util.table3|ddl\n',
+        '\n-- ODESSEY BEGIN |data fix|dml\n\n    CREATE OR REPLACE FUNCTION util.function()\n    RETURNS VOID AS\n    $BODY$\n        DECLARE v_sql = text();\n        BEGIN;\n            SELECT 1;\n        END;\n    $BODY$\n    LANGUAGE plpgsql;\n    \n-- ODESSEY END |data fix|dml\n'
+    ]
+
+    with patch('builtins.open', write_data="") as mock_file:
+        results = builder.write_migration(file, spec)
+
+    assert results == True

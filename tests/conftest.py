@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import mock_open
 from odyssey_db.db import postgres
 from odyssey_db.builder import Builder
 from odyssey_db.migrate import Migrate
@@ -18,3 +19,9 @@ def builder():
 def migrate():
     migrator = Migrate()
     return migrator
+
+@pytest.fixture(scope="module")
+def mocked_open_fixture():
+    opener = mock_open()
+    def mocked_open(self, *args, **kwargs):
+        return opener(self, *args, **kwargs)
