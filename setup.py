@@ -31,6 +31,7 @@ setup(
 	'pytest',
     'pytest-mock',
     'psycopg2-binary',
+    'wheel',
     ],
     include_package_data=True,
     cmdclass=cmdclass,

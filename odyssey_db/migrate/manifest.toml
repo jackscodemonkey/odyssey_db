@@ -27,3 +27,11 @@ up = [
 down = [
     {name="sandbox", type="schema", action="drop"}
 ]
+
+[0003]
+up = [
+    {name="util.function", type = "function", action = "create"},
+]
+down = [
+        {name="util.function", type = "function", action = "rollback"},
+]

@@ -74,7 +74,7 @@ def run(arguments):
 
     db_engine = engine.Engine()
     migrator = migrate.Migrate()
-    build = builder.Builder()
+    build = builder.Builder(settings=settings)
     fix = fixture.Fixture()
 
 
