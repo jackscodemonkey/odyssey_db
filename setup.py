@@ -15,6 +15,18 @@ version = __version__
 release = __release__
 name = 'odyssey-db'
 
+install_requires = [
+    'pytest-mock',
+    'pytest-sphinx',
+    'sphinx-sql',
+    'sphinx-argparse',
+    'psycopg2-binary',
+    ]
+
+setup_requires = [
+    'wheel'
+    ]
+
 setup(
     name=name,
     version=release,
@@ -25,14 +37,8 @@ setup(
     description="Database first migration manager.",
     long_description=long_description,
     long_description_content_type="text/x-rst",
-    install_requires=[
-        'sphinx-sql',
-	'sphinx-argparse',
-	'pytest',
-    'pytest-mock',
-    'psycopg2-binary',
-    'wheel',
-    ],
+    setup_requires=setup_requires,
+    install_requires=install_requires,
     include_package_data=True,
     cmdclass=cmdclass,
     command_options={
