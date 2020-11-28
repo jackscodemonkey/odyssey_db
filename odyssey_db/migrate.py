@@ -32,11 +32,18 @@ class Migrate:
         """
         file_info = []
         with open(file_name) as f:
+            logger.debug(f"Reading file: {file_name}")
             content = f.read()
             objname = None
-            if str_regex.findall(content):
+            if str_regex.search(content):
                 objresults = [file_name]
-                objname = [tuple(str(i).strip() for i in m if i) for m in str_regex.findall(content)]
+                objmatch = str_regex.search(content)
+                try:
+                    objname = ([ x.strip() for x in objmatch.groups() if x is not None])
+                    objname = [ (objname[0], objname[1]) ]
+                except Exception as e:
+                    objname = ([ x.strip() for x in objmatch.groups() if x is not None])
+                    logger.warning(e, objname)
                 objresults.extend(*objname)
                 file_info.append(objresults)
         return file_info
@@ -58,5 +65,9 @@ class Migrate:
         for file in files:
             result = self.get_name_from_file(file_name=file, str_regex=str_regex)
             if len(result) > 0:
-                results[result[0][1]].append({'name':result[0][2],'file':result[0][0]})
+                results[result[0][1]].append({'name':result[0][2],'file':str(result[0][0])})
         return results
+
+    def flatten_files_list(self, source_list):
+        flat = [ item for (k,v) in source_list.items() for item in v ]
+        return flat

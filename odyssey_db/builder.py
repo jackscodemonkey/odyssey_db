@@ -13,6 +13,10 @@ class Builder:
 
     def __init__(self, settings):
         self.MIGRATION_FOLDER = settings.MIGRATION_FOLDER
+        self.MIGRATION_MAINIFEST = settings.MIGRATION_MAINIFEST
+
+        logger.debug(f"Migration Folder: {self.MIGRATION_FOLDER}")
+        logger.debug(f"Manifest File: {self.MIGRATION_MAINIFEST}")
 
         version_init_file = Path(self.MIGRATION_FOLDER, '__init__.py')
         if not version_init_file.is_file():
@@ -29,7 +33,13 @@ class Builder:
             self.__version__ = version.__version__
             self.__release__ = version.__release__
 
-    def read_manifest(self, file):
+    def get_existing_files(self):
+        files = []
+        extensions = ['*_up.sql', ]
+        [files.extend(Path(self.MIGRATION_FOLDER).glob(x)) for x in extensions]
+        return files
+
+    def read_manifest(self):
         """
         Parses manifest file for the list and order of objects to build
         of up / down migrations.
@@ -39,7 +49,7 @@ class Builder:
         :return: Dictionary of toml contents
         :rtype: [dict]
         """
-        toml_data = toml.load(file)
+        toml_data = toml.load(self.MIGRATION_MAINIFEST)
         return toml_data
 
     def generate_file_hash(self, file):
@@ -57,10 +67,6 @@ class Builder:
                 file_hash.update(chunk)
         digest = file_hash.hexdigest()
         return digest
-
-    def validate_migration_source_list(self, source_file_dict):
-        migration_list = []
-        return migration_list
 
     def read_source_file(self, file):
         """
@@ -99,14 +105,20 @@ class Builder:
         if sql_source:
             sql_command = sql_source
         else:
-            sql_command = self.read_source_file(file)
+            if Path(file).is_file():
+                sql_command = self.read_source_file(file)
+            else:
+                logger.error(f"Source file not found: {str(file)}")
+                exit(-1)
+
         wrapped_command = self.wrap_odessey_cmd(
             objname=objname, objtype=objtype, sql_cmd=sql_command)
+
         return wrapped_command
 
-    def migration_file_name(self,  build_number, direction, migration_folder):
+    def migration_file_name(self,  build_number, direction):
         filename = ''.join([build_number, '_', direction, '.sql'])
-        full_path = ''.join([migration_folder, '/', filename])
+        full_path = ''.join([self.MIGRATION_FOLDER, '/', filename])
         pathlib_path = Path(full_path)
         logger.debug("Migration file: {}".format(str(full_path)))
         return pathlib_path
@@ -155,13 +167,18 @@ class Builder:
 
         match = None
         found = False
-        with Path.open(filename, 'r') as f:
-            contents = f.read()
-            results = re.search(regx, contents)
-            if results:
-                if results.group(1) is not None:
-                    match = results.group(1)
-                    found = True
+        logger.info(filename)
+        if Path(filename).is_file:
+            with Path.open(filename, 'r') as f:
+                contents = f.read()
+                results = re.search(regx, contents)
+                if results:
+                    if results.group(1) is not None:
+                        match = results.group(1)
+                        found = True
+        else:
+            logger.error(f"Rollback file does not exist: {filename}")
+            exit(-1)
         return found, match
 
     def build_cmds(self, manifest, source_file_info, old_migrations=None):
@@ -181,35 +198,69 @@ class Builder:
                 objname=manifest['name'], objtype=manifest['type'], sql_cmd=sql_command)
         elif manifest['action'].lower() == "create":
             # Wrap create statements using source files
-            for item in source_file_info:
-                if item['name'].lower() == manifest['name'].lower():
-                    source_file = item['file']
-                    wrapped_command = self.read_and_wrap(
-                        objname=manifest['name'], objtype=manifest['type'], file=source_file)
+            logger.debug(source_file_info)
+            source_file = next((item['file'] for item in source_file_info if item["name"].lower(
+            ) == manifest['name'].lower()), None)
+            if source_file:
+                wrapped_command = self.read_and_wrap(
+                    objname=manifest['name'], objtype=manifest['type'], file=source_file)
+                source_file = None
+            else:
+                logger.error(
+                    f"Source control file for object {manifest['name'].lower()} not found.")
+                exit(-1)
         elif manifest['action'].lower() == "execute":
             # Wrap create statements using source files
             source_file = manifest['location']
-            wrapped_command = self.read_and_wrap(
-                objname=manifest['name'], objtype=manifest['type'], file=source_file)
+            if Path(source_file).is_file():
+                wrapped_command = self.read_and_wrap(
+                    objname=manifest['name'], objtype=manifest['type'], file=source_file)
+                source_file = None
+            else:
+                logger.error(f"Source file not found {source_file}")
+                exit(-1)
         elif manifest['action'].lower() == "rollback":
             # Search old migration files for last version of object source.
-            for migration_file in old_migrations:
-                result, sql_command = self.match_previous_definition(filename=migration_file, objname=manifest['name'],objtype=manifest['type'])
-                if result:
-                    wrapped_command = self.read_and_wrap(objname=manifest['name'], objtype=manifest['type'], file=None, sql_source=sql_command)
-                    break
-            if wrapped_command == None:
-                logger.error('Rollback version not found!')
+            if old_migrations:
+                for migration_file in old_migrations:
+                    if migration_file:
+                        if Path(migration_file).is_file():
+                            result, sql_command = self.match_previous_definition(
+                                filename=migration_file, objname=manifest['name'], objtype=manifest['type'])
+                            if result:
+                                wrapped_command = self.read_and_wrap(
+                                    objname=manifest['name'], objtype=manifest['type'], file=None, sql_source=sql_command)
+                                break
+                        else:
+                            logger.error(f'Expected migration file {migration_file} does not exist! Cannot find a rollback version for manifest!')
+                            logger.error(f"Manifest: {manifest}")
+                            logger.error(f"Know previous migrtion files: {old_migrations}")
+                            exit(-1)
+            else:
+                logger.error(
+                    f"Missing previous up migration files, cannot find a rollback version for manifest!")
+                logger.error(f"Manifest: {manifest}")
                 exit(-1)
-        return wrapped_command
+
+        if wrapped_command:
+            return wrapped_command
+        else:
+            logger.error("Build command is empty!")
+            exit(-1)
 
     def build_up_migration(self, build_number, config, source_file_info):
         build = config[build_number]['up']
         cmds = []
         if len(build) > 0:
             for manifest in build:
-                results = self.build_cmds(manifest=manifest, source_file_info=source_file_info)
+                results = self.build_cmds(
+                    manifest=manifest, source_file_info=source_file_info)
                 cmds.append(results)
+        else:
+            logger.error(
+                f"Build up for {build_number} is empty. Check your manifest.")
+            exit(-1)
+        logger.debug(f"Up commands for build {build_number}: {cmds}")
         return cmds
 
     def build_down_migration(self, build_number, config, source_file_info):
@@ -221,6 +272,17 @@ class Builder:
         build_down = config[build_number]['down']
         if len(build_down) > 0:
             for manifest in build_down:
-                results = self.build_cmds(manifest=manifest, source_file_info=source_file_info, old_migrations=previous_files)
-                cmds.append(results)
+                results = self.build_cmds(
+                    manifest=manifest, source_file_info=source_file_info, old_migrations=previous_files)
+                if results:
+                    cmds.append(results)
+                else:
+                    logger.error(
+                        f"Build down for {build_number} is empty. Every up build must have a corrisponding roll back. Check your mainifest.")
+                    exit(-1)
+        else:
+            logger.error(
+                f"Build down for {build_number} is empty. Every up build must have a corrisponding roll back. Check your mainifest.")
+            exit(-1)
+        logger.debug(f"Down commands for build {build_number}: {cmds}")
         return cmds
